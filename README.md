@@ -1,14 +1,5 @@
 # Libor Market Models
 
-By Group Member: 
-
-*  Yunqian Li
-*  Chuanning Li
-*  Hanqing Wang
-*  Qi Liang
-
-[TOC]
-
 ## Introduction
 
 Financial derivatives market constitutes a big portion of the financial market, and among them, interest rate derivatives play a pivotal role. In addition to its huge size, this market is also famous for its complexity. There are many types of rate, like federal fund rate, libor, treasury rate, and each rate has its own term structure, which consists the information of its forward rates. For each rate, there could be multiple products, from most basic ones like FRA and swap, to advanced ones like caps and swaption, not to mention those complicated OTC products. The complexity of this market has pricing a hard task.
@@ -219,83 +210,3 @@ Third, for $j = i-1, i-2 \cdots 1$ and then $j = i + 1, i+2, \cdots m$, sequenti
 && = \quad f_{t,j} e^{\bar{\mu_{j}} - \frac{1}{2}\sigma_{t}^2 dt + Z } \\
 \end{aligned}
 \end{equation*}
-
-## Pricing the contracts
-
-Having our Libor Market Model set up, we are now going on to price some contract. This section will introduce what we have done to give a fair price to the UBS contract. Firstly, we downloaded and pre-processed relevant market data as the input to our program. Secondly, we used the data to fit to the parameters of volatility and correlation functions. Finally we used Monte-Carlo method to simulate a price for this contract.
-
-### Pre-processing data
-
-We downloaded forward rates and cap & swaption implied volatility on Nov. 22nd from Bloomberg. The forward rate is quite straightforward, with 3 month as time interval and the longest forward rate matures at 50 years. However, to price our contract, we will not need that much data, so we only saved the first 15 years' data. The full forward rate structure looks like:
-
-![The Forward Rate Structure](https://lh3.googleusercontent.com/-E7NthEwWKmo/VnHSQT7IEhI/AAAAAAAACF4/RLSb8zEDjHk/s0/r0struct.png "Forward Rate Stucture")
-
-We did a lot work on using the cap volatility. The original data from Bloomberg consists of a matrix with rows being different maturities and columns being different strikes. At the first step, we only picked out the at-the-money caps, whose strike equals the swap rate of the same maturity. This results in only 15 data points, with maturity unevenly ranging from 1 year to 30 years. 
-
-| Maturity | Implied Volatility | Swap Rate |
-| :---: | :---: | :---: |
-| 1Yr | 0.909 | 0.52%|
-|2Yr | 0.7665 | 0.75%|
-|3Yr | 0.776 | 1.06%|
-|4Yr | 0.6555 | 1.42%|
-| 5Yr | 0.5255 | 1.80%|
-| 6Yr | 0.434 | 2.14%|
-| 7Yr | 0.3885 | 2.43%|
-| 8Yr | 0.3555 | 2.66%|
-| 9Yr | 0.3335 | 2.86%|
-| 10Yr | 0.3195 | 3.02%|
-| 12Yr | 0.292 | 3.27%|
-| 15Yr | 0.2515 | 3.51%|
-| 20Yr | 0.2305 | 3.73%|
-| 25Yr | 0.221 | 3.83%|
-| 30Yr | 0.2155 | 3.88%|
-
-However, in our program, we would need an implied volatility for each forward rate, and therefore, we need to infer the volatility term structure. We utilized the stripping algorithm introduced in Lecture Note 4 to strip the caplet volatility. However, the result is not very good. The term structure is too volatile and interpolated volatility goes up and down irregularly. The situation is especially worse when time to maturity is short, causing great troubles to fit parameters. For example, in fitting volatility function 2, caplet implied variance for year 4, $\int_{4}^{5}{\sigma_t^2 dt}$, is negative. This would raise a `math domain error` as we are trying to take the square root of a negative number. After discussion, we believe that short term rates are quite low and there is a possibility of Fed increasing the rates. Function 2, assuming a rigid variance integral, cannot take this into consideration. Therefore, we manually filtered this volatility to get a a more smooth curve and avoided using function 2 as the volatility function. As is shown in the following graph, the blue line represents the interpolated volatility and the red line is smoothed version. We are going to use the data on the red line to train our volatility function.
-
-![enter image description here](https://lh3.googleusercontent.com/-r-jT6sJp4xA/VnHo9oF0kXI/AAAAAAAACGM/8eHVFArBZB0/s0/volStruct.png "Volatility Structure")
-
-In terms of swaption data, we did not make much modification. We discarded the swaptions with 1 month to maturity, and swaptions that may involve forward rates that matures after 15 years (since we are not going to use these forward rates).
-
-### Fitting Parameters
-
-In pricing this contract, we chose volatility function 7 and the second correlation function. We use the filtered volatility data to train our volatility function through its internal interface. The result of volatility fitting is
-
-![enter image description here](https://lh3.googleusercontent.com/-TzNkG70sg7M/VnTlnML4r4I/AAAAAAAACG0/zYrReoi26TQ/s0/2.png "Fitted Volatility.png")
-
-Then we proceed to calibrate to the correlation function, by minimizing the following error $$\sum_i ( \sigma_{black,i}^2 T_i - \sigma_{infer}^2) ^2$$ as discussed in the correlation function section. 
-
-After calibration, the simulation of the LMM would be straightforward. For instance, we should simulation the evolution of the forward rates curves from pricing time to at least the maturity of the product, that is from 11/24/2010 to 11/24/2025. One path of the forward rate valid from 8/24/2025 to 11/24/205 is plotted below.
-
-![enter image description here](https://lh3.googleusercontent.com/-4TE5mye0XOY/VnTmhbsUv2I/AAAAAAAACHA/LysiYHItolI/s0/3.png "Sample Path.png")
-
-
-### Simulation to Get a Price
-
-In its life span, the payment schedule of the product is as following: For the first 3 years, the issuer will pay the holder interest coupon at a fixed rate 5.65% on Feb 24, May 24, Aug 24 and Nov 24, respectively. After that, the issuer will pay a floating rate interest, which is the 3 month Libor rate determined 3 month before the payment date plus 1.25%, with 7.5% as the ceiling. Also, starting from 11/24/2013, the issue will have the right to prepay the principle and any accrued interest on each interest payment date. Thus, the product encapsulates an option in the favor of the issuer.
-As to the numeraire, we choose it as the bond price from 11/24/2013 to 11/24/2025, which spans from the pricing date to the maturity.
-Because of the callable feature of it, we need to decide whether the issuer will redeem the notes on each interest payment date in our valuation.
-To solve it, we are applying the Longstaff-Schwitz Least Square algorithm to predicting the value of the remaining payments if the issuer chooses to continue the term of the notes, where we will use the swap rate as the input variable of the regression model, $$ Y = a + b X + c X^2$$ In the formula above,  is the swap rate at current time spot, which can be calculated given the simulated forward rates curve. While, Y is value of all future payments of the notes if it is continued to next interest payment date. It worth be noticed that more polynomial terms can be included in the regression model, but we only consider  and  in our contest, to avoid overfitting issue.
-Before pricing the notes, we need to simulate a relatively small number of forward rates path, to fit the parameters of the regression model. Then the procedure of valuation would be
-
-1.  Simulate a path of the forward rate curves based on calibrated LMM.
-2.  For each interest payment date starting from 11/24/2013, calculate the current swap rate and submit it to the regression model to get the hold value of the notes, $V_1$
-3.  Let  $V_2$ be value of the principle and unpaid the interest if the issue redeem the notes.
-4.  If $V_1 \gt V_2$ , the issuer would choose to redeem the notes, thus the notes is terminated at that point.
-5.  Discount all the payment forward to the maturity.
-6.  The price the notes will be $$ V = P( 0, 20 ) \sum_i \frac{C_i}{P(t_i, 20)} $$
-7.  Repeat the above steps for 1000 times and average the calculated prices as the final price of the notes.
-
-Based on our valuation model, the price of the notes on 11/24/2010 is 1151.5614. If the note is not callable, then its price will be 1142.3234. As one can see the price difference is 9.2380 , which is value of the embedded option.
-
-### Analysis of Possible Errors
-
-Compared to the traded price, the price given by our valuation is a little higher. Retrospecting our LMM model building and valuation framework, we infer that the reason below may account for the overpricing.
-
-1. 	The irregular structure pattern of the market implied volatilities on the pricing date is deviated from its historical. Instead of a hump shape, the shape of the volatility curve is almost monotonously decreasing, which can cause an abnormal fitting for the value of LMM parameters. Not to mention that we have done some manual filtering to the structure.
-2. 	The regression model we chose to predict the hold value of the notes is a second order formula.  In fact, the choice of the regression model is largely based on personal experience. In our case, we used a 2nd order polynomial regression model with the swap rate as the regressor. As a result, about 30%-40% of the simulation, the issuer will choose to terminate the notes before its maturity. A higher rate of it can reduce the price of the product.
-3. Limited simulation time. We only simulated our models for 1000 times, much less than a typical Monte Carlo simulation would require. However, we made this choice because simulation is quite time consuming, at approximately 1 second per trial. If we expand to 10000 simulations, which is much reasonable, we have to wait until the deadline. Limited simulation numbers has inflated our estimation error, which might be a cause for our higher price.
-
-## Conclusion
-
-In this project, we implemented our version for the Libor Market Models. We combined multiple choices of volatility and correlation, and also some choices for simulation. Meanwhile, we are quite proud that our implementation is quite extensible, allowing user to develop his new choice. Using this model, we priced the UBS callable fix-to-float rate notes. Although our results are a bit higher than the market trade price, the error remains within an acceptable range. This error might be caused by irregularity in data, small simulation number, and maybe some hard-to-find error in our implementation. Overall, Libor Market Models are quite important topics in the field of term structure models, and we are proud that we can do such a project.
-
